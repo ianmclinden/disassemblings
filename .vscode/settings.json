@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.env": "shellscript",
+        "*.yml": "yaml",
+        "*.asm": "arm",
+        "*.c": "c",
+        "*.h": "c"
+    },
+    "makefile.configureOnOpen": true,
+}
