@@ -16,8 +16,6 @@
     .include "syscalls.s"
 
 _start:
-    ; save some space on the stack for the fd and rx'd byte count
-    sub sp, sp, #16                   ; 16 bytes
 
 socket:
     ; int socket(int domain, int type, int protocol);
@@ -28,7 +26,7 @@ socket:
     svc 0
     cmp x0, 0
     blt exit
-    str x0, [sp, #-16]! ; store the fd on the stack
+    str x0, [sp, #-16]!  ; store the fd on the stack - 16
 
 bind:
     ; int bind(int socket, sockaddr *address, socklen_t address_len);
@@ -49,26 +47,13 @@ print_lstn_msg:
     mov x16, SYS_WRITE
     svc 0                        ; call the syscall
     cmp x0, 0                    ; rc is in x0
-    blt exit                    ; < 0, error
+    blt exit                     ; < 0, error
 
 recv_loop:
 
-    ; zeroize the buffer
-    adrp x1, recv_buf@PAGE
-    add x1, x1, recv_buf@PAGEOFF
-    mov x6, recv_buf_len
-    mov x7, 0 ; a character counter
-    mov x0, 0
-.zeroize_loop:
-    str x0, [x1, x7]
-    cmp x7, x6
-    bge recvfrom ; len is bytes-1, but we never write that last byte
-    add x7, x7, #1
-
 recvfrom:
     ; int recvfrom(int s, void *buf, size_t len, int flags, struct sockaddr *from, int *fromlenaddr);
-    ldr x0, [sp], #16                 ; load/restore fd from the stack
-    str x0, [sp, #-16]!
+    ldr x0, [sp]                      ; load fd from the stack
     adrp x1, recv_buf@PAGE            ; buffer ptr
     add x1, x1, recv_buf@PAGEOFF      ; (buffer offset)
     mov x2, recv_buf_len              ; len
@@ -82,7 +67,7 @@ recvfrom:
     cmp x0, 0
     blt exit       ; < 0, error
     beq recv_loop  ; == 0, shutdown
-    mov x9, x0     ; store bytes in x9 for now
+    str x0, [sp, #-16]!               ; push rx byte count to the stack
 
 print_recv:
     ; print "Received: "
@@ -99,7 +84,7 @@ print_recv:
     mov x0, STDOUT
     adrp x1, recv_buf@PAGE
     add x1, x1, recv_buf@PAGEOFF
-    mov x2, x9
+    ldr x2, [sp]                 ; load rx byte count from the stack
     mov x16, SYS_WRITE
     svc 0
     cmp x0, 0
@@ -107,11 +92,10 @@ print_recv:
 
 sendto:
     ; int sendto(int s, caddr_t buf, size_t len, int flags, caddr_t to, socklen_t tolen);
-    ldr x0, [sp], #16                   ; load/restore fd from the stack
-    str x0, [sp, #-16]!
+    ldr x0, [sp, #16]                   ; load fd from the stack
     adrp x1, recv_buf@PAGE              ; buffer ptr
     add x1, x1, recv_buf@PAGEOFF        ; (buffer offset)
-    mov x2, x9                          ; nbytes
+    ldr x2, [sp], #16                   ; nbytes - pop rx byte count from the stack
     mov x3, #0                          ; flags
     adrp x4, cli_addr@PAGE              ; to ptr
     add x4, x4, cli_addr@PAGEOFF
